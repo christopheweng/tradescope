@@ -949,6 +949,11 @@ function App() {
     })
   ), []);
 
+  const sourceLabels = language === "zh"
+    ? { cnn: "CNN", alternative: "Alternative.me", static: "快照", default: "資料來源" }
+    : { cnn: "CNN", alternative: "Alternative.me", static: "Snapshot", default: "Source" };
+  const sentimentSourceLabel = sourceLabels[sentimentSource] ?? sourceLabels.default;
+
   return (
     <div className="app">
       <header className="app-header">
@@ -1188,7 +1193,3 @@ function SentimentBadge({ score, labels }) {
 }
 
 export default App;
-  const sourceLabels = language === "zh"
-    ? { cnn: "CNN", alternative: "Alternative.me", static: "快照", default: "資料來源" }
-    : { cnn: "CNN", alternative: "Alternative.me", static: "Snapshot", default: "Source" };
-  const sentimentSourceLabel = sourceLabels[sentimentSource] ?? sourceLabels.default;
