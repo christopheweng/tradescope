@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import TradingViewWidget from "./components/TradingViewWidget";
 import useDebouncedValue from "./hooks/useDebouncedValue";
@@ -13,6 +13,7 @@ import {
 } from "./services/marketData";
 
 const FMP_API_KEY = import.meta.env.VITE_FMP_API_KEY || "demo";
+const GOLD_API_KEY = import.meta.env.VITE_GOLDAPI_KEY || "";
 const USING_FMP_DEMO = !import.meta.env.VITE_FMP_API_KEY;
 const REFRESH_INTERVAL_MS = 30_000;
 const DEFAULT_SENTIMENT = 38;
@@ -55,6 +56,21 @@ const DEFAULT_CRYPTO = [
   { id: "sui", symbol: "SUI", name: "Sui", tvSymbol: "BINANCE:SUIUSDT" },
 ];
 
+const DEFAULT_COMMODITIES = [
+  {
+    id: "gold",
+    symbol: "XAUUSD",
+    name: "Gold (Spot)",
+    exchange: "Spot",
+    tvSymbol: "OANDA:XAUUSD",
+    price: 2378.42,
+    change: 14.28,
+    changePct: 0.6,
+    currency: "USD",
+    lastUpdated: Date.now(),
+  },
+];
+
 const translations = {
   en: {
     appName: "TradeScope",
@@ -63,6 +79,7 @@ const translations = {
     sections: {
       indexes: "US Equities",
       crypto: "Crypto",
+      commodities: "Commodities",
       events: "Upcoming US Macro Events",
       today: "Today's Take",
       todayNote: "Risk sentiment is cautious: tech and crypto are under pressure ahead of Core CPI and the FOMC decision. Consider smaller size and faster profit-taking.",
@@ -90,6 +107,9 @@ const translations = {
       empty: "No recent news for this asset.",
       error: "Could not load news right now.",
     },
+    common: {
+      loading: "Loading...",
+    },
     feedStatus: {
       equitiesError: "Unable to load US equity prices right now.",
       equitiesUnavailable: "No prices returned for these tickers.",
@@ -112,79 +132,72 @@ const translations = {
       currency: "Currency",
       dataUnavailable: "Price data will appear once we load it.",
     },
-    sentimentMeta: {
-      updated: "Updated",
-      stale: "Auto update failed; showing last value.",
-      source: "Source",
-      refresh: "Refresh",
-    },
-    common: {
-      loading: "Loading...",
-      retry: "Retry",
-    },
   },
   zh: {
     appName: "TradeScope",
-    subtitle: "美股 / 加密貨幣 / 宏觀事件",
-    languageLabel: "語言",
+    subtitle: "美股 / 加密货币 / 宏观事件",
+    languageLabel: "语言",
     sections: {
       indexes: "美股",
-      crypto: "加密貨幣",
-      events: "即將公布的美國宏觀事件",
-      today: "今日觀點",
-      todayNote: "市場情緒偏保守：科技股與加密資產在核心CPI與聯準會決議前承壓，建議降低部位並加快獲利了結。",
-      searchPlaceholder: "搜尋代碼或名稱",
-      noResults: "找不到符合條件的項目。",
+      crypto: "加密货币",
+      commodities: "大宗商品",
+      events: "即将公布的美国宏观事件",
+      today: "今日观点",
+      todayNote: "风险情绪偏谨慎：科技股和加密货币在核心CPI与FOMC决议前承压。建议控制仓位、加快获利了结。",
+      searchPlaceholder: "搜索代码或名称",
+      noResults: "没有找到匹配项目。",
     },
     views: {
-      dashboard: "總覽",
-      calendar: "行事曆",
-      news: "財經新聞",
+      dashboard: "总览",
+      calendar: "日历",
+      news: "财经新闻",
     },
     sentimentLabels: {
       neutral: "中性",
-      extremeFear: "極度恐慌",
-      fear: "恐慌",
-      greed: "貪婪",
-      extremeGreed: "極度貪婪",
+      extremeFear: "极度恐惧",
+      fear: "恐惧",
+      greed: "贪婪",
+      extremeGreed: "极度贪婪",
     },
     cardChange: {
       up: "+",
       down: "-",
     },
     news: {
-      title: "最新新聞",
-      empty: "目前沒有相關新聞。",
-      error: "暫時無法載入新聞，請稍後重試。",
-    },
-    feedStatus: {
-      equitiesError: "目前無法載入美股報價。",
-      equitiesUnavailable: "查無這些代碼的即時價格。",
-      equitiesFallback: "主要報價來源暫時中斷，顯示延遲的備援價格。",
-      equitiesStatic: "所有報價來源皆失敗，改顯示快照價格（非即時）。",
-      equitiesDemoKey: "目前使用 Financial Modeling Prep 的 demo 金鑰，僅支援 AAPL、TSLA 等少數代碼。請設定 VITE_FMP_API_KEY 以取得完整報價。",
-    },
-    search: {
-      add: "加入",
-      added: "已追蹤",
-      loading: "搜尋中…",
-      noResults: "暫時沒有結果",
-      error: "搜尋失敗，請再試一次。",
-    },
-    detail: {
-      overview: "資產概況",
-      lastUpdated: "最後更新",
-      updatedJustNow: "剛剛",
-      refresh: "重新整理",
-      currency: "計價幣別",
-      dataUnavailable: "資料載入後會自動顯示。",
+      title: "最新新闻",
+      empty: "该资产暂无相关新闻。",
+      error: "当前无法加载新闻。",
     },
     common: {
-      loading: "載入中…",
-      retry: "重試",
+      loading: "加载中...",
+    },
+    feedStatus: {
+      equitiesError: "暂时无法获取美股价格。",
+      equitiesUnavailable: "未返回这些股票的报价。",
+      equitiesFallback: "主报价源不可用，显示延迟的备用行情。",
+      equitiesStatic: "所有行情源均失败，显示静态快照（非即时）。",
+      equitiesDemoKey: "正在使用 Financial Modeling Prep 的 demo key。除 AAPL、TSLA 等少数股票外不会返回数据，请配置 VITE_FMP_API_KEY。",
+    },
+    search: {
+      add: "添加",
+      added: "已关注",
+      loading: "搜索中...",
+      noResults: "尚无匹配结果",
+      error: "搜索失败，请稍后重试。",
+    },
+    detail: {
+      overview: "概览",
+      lastUpdated: "最近更新",
+      updatedJustNow: "刚刚",
+      refresh: "刷新",
+      currency: "货币",
+      dataUnavailable: "加载完成后将显示价格数据。",
     },
   },
 };
+
+
+
 
 const SENTIMENT_META_TEXT = {
   en: {
@@ -194,12 +207,14 @@ const SENTIMENT_META_TEXT = {
     refresh: "Refresh",
   },
   zh: {
-    updated: "更新於",
-    stale: "自動更新失敗，目前顯示上次的數值。",
-    source: "資料來源",
-    refresh: "重新整理",
+    updated: "已更新",
+    stale: "自动更新失败，显示上一次的数值。",
+    source: "来源",
+    refresh: "刷新",
   },
 };
+
+
 
 const STATIC_CALENDAR_EVENTS = [
   { date: "2025-11-12", time: "21:30", region: "US", title: "Core CPI (m/m)", importance: "high" },
@@ -402,7 +417,7 @@ function AssetDetail({ asset, text, newsState, onRefresh }) {
         <div>
           <h2>{asset.name} ({asset.symbol})</h2>
           <p className="asset-detail-meta">
-            {asset.exchange ? `${asset.exchange} · ` : ""}
+            {asset.exchange ? `${asset.exchange} • ` : ""}
             {text.detail.currency}: {asset.currency ?? "USD"}
           </p>
         </div>
@@ -586,6 +601,7 @@ function App() {
 
   const [equities, setEquities] = useState(() => DEFAULT_EQUITIES.map(createEquity));
   const [crypto, setCrypto] = useState(() => DEFAULT_CRYPTO.map(createCrypto));
+  const commodities = useMemo(() => DEFAULT_COMMODITIES, []);
 
   const [equityQuery, setEquityQuery] = useState("");
   const [cryptoQuery, setCryptoQuery] = useState("");
@@ -611,8 +627,14 @@ function App() {
     if (selectedRef.type === "equity") {
       return equities.find((item) => item.symbol === selectedRef.symbol) ?? null;
     }
-    return crypto.find((item) => item.id === selectedRef.id) ?? null;
-  }, [selectedRef, equities, crypto]);
+    if (selectedRef.type === "crypto") {
+      return crypto.find((item) => item.id === selectedRef.id) ?? null;
+    }
+    if (selectedRef.type === "commodity") {
+      return commodities.find((item) => item.id === selectedRef.id) ?? null;
+    }
+    return null;
+  }, [selectedRef, equities, crypto, commodities]);
 
   const [newsState, setNewsState] = useState({ status: "idle", items: [] });
 
@@ -950,7 +972,7 @@ function App() {
   ), []);
 
   const sourceLabels = language === "zh"
-    ? { cnn: "CNN", alternative: "Alternative.me", static: "快照", default: "資料來源" }
+    ? { cnn: "CNN", alternative: "Alternative.me", static: "快照", default: "来源" }
     : { cnn: "CNN", alternative: "Alternative.me", static: "Snapshot", default: "Source" };
   const sentimentSourceLabel = sourceLabels[sentimentSource] ?? sourceLabels.default;
 
@@ -969,7 +991,7 @@ function App() {
             aria-label={text.languageLabel}
           >
             <option value="en">English</option>
-            <option value="zh">繁體中文</option>
+            <option value="zh">简体中文</option>
           </select>
           <div className="sentiment-wrapper">
             <SentimentBadge score={sentimentScore} labels={text.sentimentLabels} />
@@ -1074,6 +1096,24 @@ function App() {
               </div>
             )}
           </section>
+
+          {commodities.length > 0 && (
+            <section className="section">
+              <div className="section-header">
+                <h2>{text.sections.commodities}</h2>
+              </div>
+              <div className="grid">
+                {commodities.map((item) => (
+                  <MarketCard
+                    key={item.id}
+                    item={item}
+                    onClick={() => setSelectedRef({ type: "commodity", id: item.id, symbol: item.symbol })}
+                    isActive={selectedRef?.type === "commodity" && selectedRef.id === item.id}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="section">
             <div className="section-header">
@@ -1193,3 +1233,5 @@ function SentimentBadge({ score, labels }) {
 }
 
 export default App;
+
+

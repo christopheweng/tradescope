@@ -3,6 +3,8 @@ import { STATIC_EQUITIES, STATIC_EQUITY_MAP } from "../data/staticEquities";
 const FMP_BASE = "https://financialmodelingprep.com/api/v3";
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 const CRYPTO_NEWS_API = "https://min-api.cryptocompare.com/data/v2/news/";
+const GOLD_API_URL = "https://www.goldapi.io/api/XAU/USD";
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 function formatTimestamp(timestampMs) {
   try {
@@ -408,4 +410,88 @@ export async function fetchFearGreedIndex() {
     timestamp: Date.now(),
     source: "static",
   };
+}
+
+export async function fetchGoldPrice(apiKey) {
+  if (!apiKey) {
+    throw new Error("Gold API key is required");
+  }
+  const response = await fetch(GOLD_API_URL, {
+    headers: {
+      "x-access-token": apiKey,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Gold price feed failed with status ${response.status}`);
+  }
+  const payload = await response.json();
+  const price = parseNumber(payload?.price);
+  const openPrice = parseNumber(payload?.open_price);
+  const change = price != null && openPrice != null ? price - openPrice : null;
+  const changePct = change != null && openPrice ? (change / openPrice) * 100 : null;
+  const timestamp = payload?.timestamp ? payload.timestamp * 1000 : Date.now();
+
+  return {
+    id: "gold",
+    symbol: "XAUUSD",
+    name: "Gold (Spot)",
+    exchange: "Spot",
+    price,
+    change,
+    changePct,
+    currency: "USD",
+    lastUpdated: timestamp,
+    tvSymbol: "OANDA:XAUUSD",
+  };
+}
+
+export async function generateDailyOutlook({ language = "en", goldPrice, goldChangePct }, apiKey) {
+  if (!apiKey) {
+    throw new Error("Gemini API key is required");
+  }
+
+  const prompt = [
+    "You are a financial market strategist. Craft a concise daily outlook in under 90 words.",
+    `Current gold spot price: ${goldPrice != null ? `$${goldPrice.toFixed(2)}` : "unknown"} USD.`,
+    goldChangePct != null ? `Gold 24hr change: ${goldChangePct.toFixed(2)}%.` : "Gold 24hr change: unknown.",
+    "Tone: professional, pragmatic, with one actionable insight.",
+    "Mention macro context (US data/Fed, risk sentiment) if relevant.",
+    language === "zh"
+      ? "Respond in Traditional Chinese."
+      : "Respond in English.",
+  ].join(" ");
+
+  const response = await fetch(`${GEMINI_API_BASE}/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            { text: prompt },
+          ],
+        },
+      ],
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUAL_CONTENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini daily outlook failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const text = payload?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+  if (!text) {
+    throw new Error("Gemini response missing text");
+  }
+
+  return text;
 }
